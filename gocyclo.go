@@ -9,10 +9,11 @@
 //      gocyclo [<flag> ...] <Go file or directory> ...
 //
 // Flags:
-//      -over N   show functions with complexity > N only and
-//                return exit code 1 if the output is non-empty
-//      -top N    show the top N most complex functions only
-//      -avg      show the average complexity
+//      -over N          show functions with complexity > N only and
+//                       return exit code 1 if the output is non-empty
+//      -top N           show the top N most complex functions only
+//      -avg             show the average complexity
+//      -skip-hidden     do not explore folders which start with '.'
 //
 // The output fields for each line are:
 // <complexity> <package> <function> <file:row:column>
@@ -27,6 +28,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,11 +39,12 @@ Usage:
         gocyclo [flags] <Go file or directory> ...
 
 Flags:
-        -over N   show functions with complexity > N only and
-                  return exit code 1 if the set is non-empty
-        -top N    show the top N most complex functions only
-        -avg      show the average complexity over all functions,
-                  not depending on whether -over or -top are set
+        -over N         show functions with complexity > N only and
+                        return exit code 1 if the set is non-empty
+        -top N          show the top N most complex functions only
+        -avg            show the average complexity over all functions,
+                        not depending on whether -over or -top are set
+        -skip-hidden    do not explore folders which start with '.'
 
 The output fields for each line are:
 <complexity> <package> <function> <file:row:column>
@@ -53,9 +56,10 @@ func usage() {
 }
 
 var (
-	over = flag.Int("over", 0, "show functions with complexity > N only")
-	top  = flag.Int("top", -1, "show the top N most complex functions only")
-	avg  = flag.Bool("avg", false, "show the average complexity")
+	over       = flag.Int("over", 0, "show functions with complexity > N only")
+	top        = flag.Int("top", -1, "show the top N most complex functions only")
+	avg        = flag.Bool("avg", false, "show the average complexity")
+	skipHidden = flag.Bool("skip-hidden", false, "do not explore folders which start with '.'")
 )
 
 func main() {
@@ -108,9 +112,13 @@ func analyzeFile(fname string, stats []stat) []stat {
 }
 
 func analyzeDir(dirname string, stats []stat) []stat {
-	filepath.Walk(dirname, func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && strings.HasSuffix(path, ".go") {
-			stats = analyzeFile(path, stats)
+	filepath.Walk(dirname, func(walkpath string, info os.FileInfo, err error) error {
+		fpath := path.Base(walkpath)
+		if *skipHidden && info.IsDir() && strings.HasPrefix(fpath, ".") {
+			return filepath.SkipDir
+		}
+		if err == nil && !info.IsDir() && strings.HasSuffix(walkpath, ".go") {
+			stats = analyzeFile(walkpath, stats)
 		}
 		return err
 	})
